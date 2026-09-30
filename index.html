@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en" data-static="1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Swim Times</title>
+<meta name="description" content="Lane, public, leisure and preschool swim times for Ottawa pools, day by day">
+<meta name="theme-color" content="#004890">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Swim Times">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest?v=3">
+<link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=3">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=3">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=3">
+<script>
+// Theme: 'auto' follows the phone/computer setting, or force 'light' / 'dark'
+(function(){
+  var t='auto'; try{ t=JSON.parse(localStorage.getItem('swimtimes.theme'))||'auto'; }catch(e){}
+  var mq=window.matchMedia('(prefers-color-scheme: dark)');
+  window.applyTheme=function(v){ t=v; var dark=v==='dark'||(v==='auto'&&mq.matches);
+    document.documentElement.classList.toggle('dark',dark); document.documentElement.dataset.theme=v; };
+  applyTheme(t);
+  (mq.addEventListener?mq.addEventListener.bind(mq,'change'):mq.addListener.bind(mq))(function(){ if(t==='auto') applyTheme('auto'); });
+})();
+</script>
+<style>
+html{color-scheme:light}
+:root{
+  --blue:#004890;          /* City of Ottawa blue */
+  --blue-dark:#00305f;
+  --teal:#00a78d;          /* City of Ottawa green-teal */
+  --teal-dark:#007c69;
+  --bg:#eef3f8; --panel:#ffffff; --ink:#0f2238; --muted:#566779; --line:#d6e0ea;
+  --chip:#e3eef9; --chip-ink:#003a73;
+  --now:#00a78d; --now-soft:#dcf5f0;
+  --warn:#8a4b00; --warn-soft:#fff2df; --bad:#c62828;
+  --bar:#004890; --bar-out:#00a78d;
+  --c-public:#9a4a00; --c-public-soft:#fdeed8; --c-preschool:#b0145a; --c-preschool-soft:#fde3ee;
+  --c-other:#5b2bb8; --c-other-soft:#ece6fb;
+  --safe-l:env(safe-area-inset-left); --safe-r:env(safe-area-inset-right);
+}
+html.dark{color-scheme:dark;
+  --bg:#08131f; --panel:#0f1f31; --ink:#e7eef6; --muted:#98a9bb; --line:#1f3349;
+  --chip:#15324f; --chip-ink:#cfe4fb;
+  --now:#2fd0b3; --now-soft:#0e3a34;
+  --warn:#ffb657; --warn-soft:#3a2a12; --bad:#ff7a70;
+  --bar:#2f7fd0; --bar-out:#1fbfa3;
+  --c-public:#ffc56b; --c-public-soft:#3b2a0f; --c-preschool:#ff9cc6; --c-preschool-soft:#3d1529;
+  --c-other:#c4b1ff; --c-other-soft:#2a1f4a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:pan-x pan-y}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow-x:hidden}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,var(--safe-l));padding-right:max(16px,var(--safe-r))}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:8px 12px;min-height:40px;touch-action:manipulation}
+button:focus-visible,input:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+
+/* ---------- header */
+header{position:sticky;top:0;z-index:10;box-shadow:0 2px 10px rgba(0,30,70,.18)}
+.bar{background:linear-gradient(90deg,var(--blue-dark),var(--blue));color:#fff;padding-top:env(safe-area-inset-top)}
+/* Home-screen app: iOS fades the area just under the status bar, so give the title extra room */
+@media (display-mode: standalone){.bar{padding-top:calc(env(safe-area-inset-top) + 18px)}.bar .wrap{padding-bottom:4px}}
+html.standalone .bar{padding-top:calc(env(safe-area-inset-top) + 18px)}
+.bar .wrap{display:flex;align-items:center;gap:12px;min-height:56px}
+.bar h1{font-size:21px;margin:0;display:flex;align-items:center;gap:10px;letter-spacing:.2px}
+.bar h1 img{width:34px;height:34px}
+.bar .meta{margin-left:auto;font-size:12px;opacity:.85;text-align:right}
+.bar .meta+button{margin-left:0}
+#theme{min-width:44px;font-size:17px;padding:6px 10px}
+.bar #refresh{margin-left:0}
+.bar button{margin-left:auto;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.35);color:#fff}
+.bar button:hover{background:rgba(255,255,255,.22)}
+.stripe{height:4px;background:var(--teal)}
+.daysbar{background:var(--panel);border-bottom:1px solid var(--line)}
+.days{display:flex;gap:6px;overflow-x:auto;padding:8px 0;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{flex:0 0 auto;min-width:62px;text-align:center;padding:6px 6px;border-radius:12px;scroll-snap-align:start;line-height:1.2}
+.day b{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.day span{display:block;font-size:19px;font-weight:700;margin:1px 0}
+.day i{display:block;font-style:normal;font-size:11px;color:var(--muted)}
+.day.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.day.on b,.day.on i{color:#d5e7fb}
+.day.none span{opacity:.45}
+
+/* ---------- controls */
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 6px}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px;overflow-x:auto;max-width:100%;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{border:0;background:transparent;border-radius:9px;min-height:34px;padding:6px 11px;white-space:nowrap;color:var(--muted);font-weight:600;font-size:14px}
+.seg button.on{background:var(--blue);color:#fff}
+.seg.teal button.on{background:var(--teal)}
+.pill{white-space:nowrap;font-weight:600;font-size:14px;color:var(--muted)}
+.pill.on{background:#f5b301;border-color:#f5b301;color:#1d1400}
+input[type=search]{flex:1 1 160px;min-width:0;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:8px 12px;min-height:40px;font:inherit;font-size:16px;-webkit-appearance:none;appearance:none}
+
+/* ---------- content */
+main{padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+.title{font-size:19px;margin:14px 0 2px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 6px}
+.section{margin-top:18px}
+.section h3{display:flex;align-items:center;gap:8px;font-size:15px;text-transform:uppercase;letter-spacing:.6px;margin:0 0 10px;color:var(--blue)}
+.section.out h3{color:var(--teal-dark)}
+html.dark .section h3{color:#8cc3ff}html.dark .section.out h3{color:var(--teal)}
+.section h3 .tag{font-size:12px;letter-spacing:0;text-transform:none;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--chip-ink)}
+.section.out h3 .tag{background:var(--now-soft);color:var(--teal-dark)}
+html.dark .section.out h3 .tag{color:var(--teal)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--blue);border-radius:12px;padding:12px 14px}
+.out .card{border-left-color:var(--teal)}
+.card h4{margin:0 0 2px;font-size:16px;display:flex;align-items:flex-start;gap:6px}
+.card h4 a{text-decoration:none}
+.card h4 a:hover{text-decoration:underline}
+.star{border:0;background:none;padding:0 2px;min-height:0;font-size:19px;line-height:1.1;color:var(--muted)}
+.star.fav{color:#f5b301}
+.basis{color:var(--muted);font-size:12px;margin-bottom:8px}
+.slots{display:flex;flex-wrap:wrap;gap:6px}
+.slot{background:var(--chip);color:var(--chip-ink);border-radius:9px;padding:5px 9px;font-size:14px;font-weight:650}
+.slot small{display:block;font-weight:400;opacity:.8;font-size:11px}
+.out .slot{background:var(--now-soft);color:var(--teal-dark)}
+html.dark .out .slot{color:#bff3e8}
+.slot.c-public{background:var(--c-public-soft)!important;color:var(--c-public)!important}
+.slot.c-preschool{background:var(--c-preschool-soft)!important;color:var(--c-preschool)!important}
+.slot.c-other{background:var(--c-other-soft)!important;color:var(--c-other)!important}
+.slot.past{opacity:.42}
+.slot.now{background:var(--teal)!important;color:#fff!important}
+.slot.now::before{content:"NOW · ";font-size:11px;font-weight:800}
+.slot.cancel{text-decoration:line-through;opacity:.6;background:transparent!important;border:1px dashed var(--bad);color:var(--bad)!important}
+.slot.changed{box-shadow:inset 0 0 0 2px #f5b301}
+.note{font-size:12px;margin-top:8px;padding:6px 8px;border-radius:8px;background:var(--warn-soft);color:var(--warn)}
+.muted{color:var(--muted)}
+.empty{background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted)}
+details{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+summary{cursor:pointer;font-weight:600;min-height:28px;display:flex;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸";margin-right:8px;transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+.nolist{margin:8px 0 0;padding:0;list-style:none;font-size:14px}
+.nolist li{padding:6px 0;border-top:1px solid var(--line);display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+.nolist li:first-child{border-top:0}
+.status{width:100%;border-collapse:collapse;margin-top:6px}
+.status td{padding:6px 6px;border-top:1px solid var(--line);font-size:13px;vertical-align:top}
+.status .bad,p.bad{color:var(--bad)}.status .good{color:var(--teal-dark)}
+html.dark .status .good{color:var(--teal)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--blue-dark);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:20;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+
+/* ---------- by-pool weekly view */
+body.pool-mode .daysbar, body.pool-mode #dayControls, body.pool-mode #typeBtns{display:none}
+.picker{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 4px}
+.picker button{min-height:36px;padding:6px 12px;border-radius:99px;font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap}
+.picker button.out{border-style:dashed}
+.picker button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.picker button.on.out{background:var(--teal);border-color:var(--teal)}
+.phead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 2px}
+.phead h2{margin:0;font-size:22px}
+.phead a.site{font-size:13px;color:var(--muted)}
+.weekbar{display:flex;align-items:center;gap:8px;margin:10px 0}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.wday{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--blue);border-radius:12px;padding:10px;min-height:120px}
+.out-pool .wday{border-top-color:var(--teal)}
+.wday.today{box-shadow:0 0 0 2px var(--teal)}
+.wday h5{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.wday h5 b{display:block;font-size:17px;color:var(--ink);text-transform:none;letter-spacing:0}
+.wday .slot{display:block;margin-bottom:6px}
+.wday .none{color:var(--muted);font-size:13px}
+.wday .note{margin-top:6px}
+.pname{cursor:pointer;text-decoration:none;background:none;border:0;padding:0;min-height:0;font:inherit;color:inherit;font-weight:inherit;text-align:left}
+.pname:hover{text-decoration:underline}
+.site-link{font-size:13px;color:var(--muted);text-decoration:none;margin-left:2px}
+@media (max-width:900px){
+  .week{grid-template-columns:1fr}
+  .wday{display:grid;grid-template-columns:78px 1fr;gap:4px 10px;min-height:0;border-top-width:1px;border-left:4px solid var(--blue)}
+  .out-pool .wday{border-left-color:var(--teal)}
+  .wday h5{margin:0}
+  .wday .slots-col{display:flex;flex-wrap:wrap;gap:6px}
+  .wday .slot{margin:0}
+  .wday .note{grid-column:1 / -1}
+  .picker{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:-4px;padding:2px 4px}
+  .picker::-webkit-scrollbar{display:none}
+  .weekbar .seg{display:flex;width:100%}
+  .weekbar .seg button{flex:1 1 0;min-width:0;padding:6px 4px;font-size:13px}
+}
+
+/* ---------- timeline */
+.tl{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tl-grid{min-width:760px;padding:6px 0}
+.tl-row{display:grid;grid-template-columns:180px 1fr;align-items:center;min-height:36px;border-top:1px solid var(--line)}
+.tl-row.head{border-top:0}
+.tl-row.tl-sub{border-top:1px dashed var(--line);min-height:30px}
+.tl-row.tl-sub .tl-name{padding-left:22px}
+.tl-name{position:sticky;left:0;z-index:3;background:var(--panel);font-size:13px;font-weight:600;padding:0 8px 0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:stretch;display:flex;align-items:center}
+.tl-track{position:relative;height:28px;margin:0 18px}
+.tl-hours{position:relative;height:18px;font-size:11px;color:var(--muted);margin:0 18px}
+.tl-hours span{position:absolute;transform:translateX(-50%)}
+.tl-line{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+.tl-bar{position:absolute;top:3px;bottom:3px;background:var(--bar);border-radius:6px;color:#fff;font-size:11px;padding:0 5px;overflow:hidden;white-space:nowrap;line-height:22px}
+.out .tl-bar{background:var(--bar-out)}
+.tl-bar.c-public{background:#c96a00}.tl-bar.c-preschool{background:#c2185b}.tl-bar.c-other{background:#6a3fd1}
+.tl-bar.cancel{background:transparent!important;border:1px dashed var(--bad);color:var(--bad)}
+.tl-now{position:absolute;top:0;bottom:0;width:2px;background:#f5b301;z-index:2}
+
+/* ---------- swim types, addresses, prices */
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0;background:var(--bar);border:1px solid rgba(255,255,255,.7)}
+.dot.c-public{background:#e08a1e}.dot.c-preschool{background:#e04a8a}.dot.c-other{background:#8a63e6}
+.addr{display:inline-block;font-size:12px;color:var(--muted);text-decoration:none;margin:0 0 4px}
+.addr:hover{text-decoration:underline}
+.status th{font-size:12px;color:var(--muted);text-align:left;padding:6px;font-weight:600}
+.fees td:not(:first-child),.fees th:not(:first-child){text-align:right;white-space:nowrap}
+.fees .use{display:block;font-weight:400;font-size:11px}
+/* ---------- map */
+#map{height:min(70vh,680px);min-height:360px;border-radius:12px;border:1px solid var(--line);overflow:hidden;isolation:isolate;background:var(--panel)}
+html.dark #map .leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9)}
+.maplegend{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:12px;color:var(--muted);margin:0 0 8px}
+.maplegend span{display:inline-flex;align-items:center;gap:5px}
+.lg{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--blue);border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+.lg.out{background:var(--teal)}.lg.off{background:#94a3b5;width:9px;height:9px}
+.pin{width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#004890;border:2px solid #fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center}
+.pin b{transform:rotate(45deg);color:#fff;font:700 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.pin.out{background:#00a78d}
+.pin.fav{border-color:#f5b301;box-shadow:0 0 0 2px #f5b301,0 2px 6px rgba(0,0,0,.4)}
+.pin.off{width:14px;height:14px;border-radius:50%;transform:none;opacity:.8;background:#7d8ea3;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.pin.off.out{background:#7fb8ae}
+.leaflet-div-icon{background:none;border:0}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--ink)}
+.leaflet-popup-content{margin:12px 14px;font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.pop h4{margin:0;font-size:16px}
+.pop .full{font-size:12px;color:var(--muted);margin:1px 0 2px}
+.pop .slots{margin:6px 0 2px}
+.pop .slot{font-size:13px;padding:4px 8px}
+.pop .note{margin-top:6px}
+.pop-links{display:flex;gap:14px;align-items:center;margin-top:10px;font-size:13px}
+.pop-links .pname{color:var(--blue);font-weight:600}
+html.dark .pop-links .pname{color:#8cc3ff}
+.leaflet-container a.leaflet-popup-close-button{color:var(--muted)}
+.spin{display:inline-block;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+@media (max-width:640px){
+  .bar h1{font-size:19px}
+  .bar .meta{display:none}
+  .bar .lbl{display:none}
+  .bar .meta+button{margin-left:auto}
+  .cards{grid-template-columns:1fr}
+  .tl-row{grid-template-columns:118px 1fr}
+  .controls{gap:6px}
+  .controls .seg{flex:1 1 100%;display:flex}
+  .seg button{flex:1 1 0;padding:6px 2px;font-size:13px;min-width:0}
+  .pill{flex:0 0 auto}
+  #map{height:min(62vh,540px)}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><div class="wrap">
+    <h1><img src="icon-192.png?v=3" alt="">Swim Times</h1>
+    <div class="meta" id="meta">Loading…</div>
+    <button id="theme" aria-label="Colour theme"></button>
+    <button id="refresh" title="Download the latest pool schedules" aria-label="Update schedules">↻<span class="lbl"> Update</span></button>
+  </div></div>
+  <div class="stripe"></div>
+  <div class="daysbar"><div class="wrap"><div class="days" id="days" role="tablist"></div></div></div>
+</header>
+
+<main class="wrap">
+  <div class="controls" id="swimRow">
+    <div class="seg" id="swimBtns" role="group" aria-label="Swim type (tap to add or remove)">
+      <button data-cat="lane" class="on" title="Lane swims"><i class="dot"></i>Lane</button>
+      <button data-cat="public" title="Public, leisure and wave swims"><i class="dot c-public"></i>Public</button>
+      <button data-cat="preschool" title="Preschool swims"><i class="dot c-preschool"></i>Preschool</button>
+      <button data-cat="other" title="Swim 50+, women's only, alternate needs, therapeutic pool"><i class="dot c-other"></i>Other</button>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="seg" id="typeBtns" role="group" aria-label="Pool type">
+      <button data-type="all" class="on">All pools</button>
+      <button data-type="indoor">Indoor</button>
+      <button data-type="outdoor">Outdoor</button>
+    </div>
+    <div class="seg teal" id="viewBtns" role="group" aria-label="View">
+      <button data-view="list" class="on">List</button>
+      <button data-view="timeline">Timeline</button>
+      <button data-view="pool">By pool</button>
+      <button data-view="map">Map</button>
+    </div>
+  </div>
+  <div class="controls" id="dayControls">
+    <div class="seg" id="timeBtns" role="group" aria-label="Time of day">
+      <button data-t="all" class="on">All day</button>
+      <button data-t="upcoming">Upcoming</button>
+      <button data-t="am">Morning</button>
+      <button data-t="mid">Midday</button>
+      <button data-t="pm">Evening</button>
+    </div>
+    <button class="pill" id="favBtn" title="Show only starred pools">★ Favourites</button>
+    <input type="search" id="q" placeholder="Find a pool…" enterkeyhint="search" autocomplete="off">
+  </div>
+  <div id="content"></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+// iPhone home-screen mode (older iOS doesn't support the display-mode media query)
+if (window.navigator.standalone) document.documentElement.classList.add('standalone');
+// Block pinch-to-zoom (Safari ignores user-scalable=no); double-tap zoom is off via touch-action in the CSS
+// (the map is left alone so you can pinch-zoom it)
+const onMap = e => e.target && e.target.closest && e.target.closest('#map');
+['gesturestart','gesturechange','gestureend'].forEach(ev => document.addEventListener(ev, e => { if (!onMap(e)) e.preventDefault(); }, {passive:false}));
+document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !onMap(e)) e.preventDefault(); }, {passive:false});
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('swimtimes.'+k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k, v){ try{ localStorage.setItem('swimtimes.'+k, JSON.stringify(v)); }catch(e){} }
+};
+let data = null, sel = 0, pollTimer = null, wasRefreshing = false;
+// The shared GitHub Pages copy is read-only: it reads data.json that the owner's server publishes
+const STATIC = document.documentElement.dataset.static === '1';
+if (STATIC && 'serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+let poolId = store.get('poolId', null), week = 0;
+let view = store.get('view','list'), ptype = store.get('ptype','all'), tfilter = 'all', onlyFav = store.get('onlyFav', false);
+let favs = new Set(store.get('favs', []));
+// Swim types: Lane by default. Kept while the app is open, back to Lane next time.
+const session = {
+  get(k, d){ try{ const v = sessionStorage.getItem('swimtimes.'+k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k, v){ try{ sessionStorage.setItem('swimtimes.'+k, JSON.stringify(v)); }catch(e){} }
+};
+let cats = new Set(session.get('cats', ['lane']));
+if (!cats.size) cats = new Set(['lane']);
+const catOf = s => s.cat || 'lane';
+const onlyLane = () => cats.size === 1 && cats.has('lane');
+const CAT_SHORT = {lane:'Lane', public:'Public', preschool:'Preschool', other:'Other'};
+const CAT_NOUN = {lane:'lane swims', public:'public or leisure swims', preschool:'preschool swims', other:'other swims'};
+function noun(){ return cats.size === 1 ? CAT_NOUN[[...cats][0]] : 'swims of these types'; }
+// Notes and changes come tagged with the swim types they affect
+function noteTexts(list){ return (list||[]).filter(n => typeof n === 'string' || (n.cats||[]).some(c => cats.has(c)))
+  .map(n => typeof n === 'string' ? n : n.text); }
+function mapsUrl(p){ return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent((p.full_name||p.name) + ', ' + (p.address||'Ottawa ON')); }
+function addrLink(p, full){ if (!p.address) return '';
+  const a = full ? p.address : p.address.replace(/,\s*Ottawa ON.*$/, '');
+  return `<a class="addr" href="${esc(mapsUrl(p))}" target="_blank" rel="noopener" title="Directions to ${esc(p.full_name||p.name)}">📍 ${esc(a)}</a>`; }
+
+// 2026 City of Ottawa drop-in fees (per visit). Same at every City pool.
+const FEES = {year: 2026, url: 'https://ottawa.ca/en/recreation-and-parks/drop-activities/pricing',
+  rows: [['Child, youth or student', 3.11, 5.48, 6.52], ['Adult', 5.19, 9.14, 10.86],
+         ['Senior', 3.89, 6.86, 8.15], ['Family', 3.11, 5.48, 6.52]]};
+
+const TIME_FILTERS = {
+  all: () => true,
+  am: s => s.start < 12*60,
+  mid: s => s.start < 14*60 && s.end > 11*60,
+  pm: s => s.end > 17*60,
+};
+// Safari-safe date handling: build dates from parts, never parse "YYYY-MM-DD" strings
+function ymd(iso){ const [y,m,d] = iso.split('-').map(Number); return new Date(y, m-1, d); }
+function fmtDate(iso, opts){ return ymd(iso).toLocaleDateString('en-CA', opts); }
+function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),3500); }
+
+function isoLocal(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+// Expand the compact data.json into the same shape the server's api/days returns
+function fromSite(j){
+  const now = new Date(), today = isoLocal(now);
+  const days = j.days.filter(d => d.date >= today).slice(0, 14);
+  return {updated: j.updated, refreshing: false, progress: '', today, attribution: j.attribution,
+    now_minutes: now.getHours()*60 + now.getMinutes(),
+    days: days.map(d => ({date: d.date, pools: j.pools.map(m => { const x = d.p[m.id] || {};
+      return {...m, status: x.s || 'no_data', basis: x.b || null, changes: x.c || [],
+        slots: (x.sl || []).map(s => ({variant:'', note:'', cancelled:false, changed:null, cat:'lane', ...s}))}; })}))};
+}
+
+async function load(){
+  clearTimeout(pollTimer);
+  try{
+    const r = await fetch(STATIC ? 'data.json' : 'api/days?n=14', {cache:'no-store'});
+    if (!r.ok) throw new Error(r.status);
+    data = STATIC ? fromSite(await r.json()) : await r.json();
+  }catch(e){
+    $('#content').innerHTML = `<div class="empty">${STATIC ? "Can't load the schedules right now. Check your connection and try again." : "Can't reach the Swim Times server."}</div>`;
+    pollTimer=setTimeout(load, 15000); return;
+  }
+  if (!data.days.length){
+    $('#days').innerHTML = '';
+    $('#content').innerHTML = `<div class="empty">No schedules for the coming days yet. They'll appear after the next update.</div>`;
+    return;
+  }
+  if (sel >= data.days.length) sel = 0;
+  renderDays(); render();
+  if (data.refreshing || !data.updated) pollTimer = setTimeout(load, 4000);
+}
+
+function typeCount(d){
+  return d.pools.filter(p => (ptype === 'all' || p.type === ptype) && p.slots.some(s => !s.cancelled && cats.has(catOf(s)))).length;
+}
+
+function renderDays(){
+  const upd = data.updated ? new Date(data.updated) : null;
+  $('#meta').innerHTML = data.refreshing ? `<span class="spin">↻</span> Downloading schedules… ${esc(data.progress||'')}`
+    : upd ? (STATIC ? 'Schedules from ' : 'Last updated ') + upd.toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'}) : '';
+  if ($('#refresh')) $('#refresh').innerHTML = data.refreshing ? '<span class="spin">↻</span><span class="lbl"> Updating</span>' : '↻<span class="lbl"> Update</span>';
+  if (wasRefreshing && !data.refreshing) toast('Schedules updated');
+  wasRefreshing = !!data.refreshing;
+  $('#days').innerHTML = data.days.map((d,i)=>{ const c = typeCount(d); return `
+    <button class="day ${i===sel?'on':''} ${c?'':'none'}" data-i="${i}" role="tab" aria-selected="${i===sel}">
+      <b>${i===0?'Today':i===1?'Tmrw':fmtDate(d.date,{weekday:'short'})}</b>
+      <span>${fmtDate(d.date,{day:'numeric'})}</span>
+      <i>${c} pool${c===1?'':'s'}</i>
+    </button>`; }).join('');
+  const on = $('#days .day.on'); if (on && on.scrollIntoView) on.scrollIntoView({block:'nearest', inline:'nearest'});
+}
+
+function visibleSlots(p, isToday){
+  const f = tfilter==='upcoming' ? (s => !isToday || s.end > data.now_minutes) : TIME_FILTERS[tfilter];
+  return p.slots.filter(s => cats.has(catOf(s))).filter(f);
+}
+
+function slotHtml(s, isToday){
+  const nowM = data.now_minutes;
+  let cls = 'slot';
+  if (s.cancelled) cls += ' cancel';
+  else if (isToday && s.end <= nowM) cls += ' past';
+  else if (isToday && s.start <= nowM && nowM < s.end) cls += ' now';
+  if (s.changed) cls += ' changed';
+  const cat = catOf(s);
+  if (cat !== 'lane') cls += ' c-' + cat;
+  // With only lane swims showing, keep it short; otherwise say which kind of swim it is
+  const desc = cat === 'lane' && !onlyLane() ? ['Lane swim', s.variant].filter(Boolean).join(' · ') : s.variant;
+  const rate = /wave swim/i.test(s.variant || '') ? 'Super rate' : '';
+  const extra = [desc, s.note, rate, s.cancelled?'cancelled':''].filter(Boolean).join(' · ');
+  return `<div class="${cls}"${s.changed?` title="${esc(s.changed)}"`:''}>${esc(s.text)}${extra?`<small>${esc(extra)}</small>`:''}</div>`;
+}
+
+function poolFilter(p){
+  const q = $('#q').value.trim().toLowerCase();
+  if (q && ![p.name, p.full_name, p.address].join(' ').toLowerCase().includes(q)) return false;
+  if (onlyFav && !favs.has(p.id)) return false;
+  if (ptype !== 'all' && p.type !== ptype) return false;
+  return true;
+}
+
+function render(){
+  if (!data) return;
+  document.body.classList.toggle('pool-mode', view === 'pool');
+  if (view === 'pool') return renderPool();
+  if (view === 'map') return renderMap();
+  const day = data.days[sel], isToday = day.date === data.today;
+  const pools = day.pools.filter(poolFilter);
+  const rows = pools.map(p => ({p, v: visibleSlots(p, isToday)})).filter(x => x.v.length);
+  const nextStart = x => { const up = x.v.find(s=>!s.cancelled && (!isToday || s.end>data.now_minutes)); return up ? up.start : 10000 + x.v[0].start; };
+  rows.sort((a,b)=> (favs.has(b.p.id)-favs.has(a.p.id)) || nextStart(a)-nextStart(b) || a.p.name.localeCompare(b.p.name));
+
+  let html = `<h2 class="title">${isToday?'Today · ':''}${fmtDate(day.date,{weekday:'long',month:'long',day:'numeric'})}</h2>
+    <p class="sub">${rows.length} of ${pools.length} pools have ${noun()}${tfilter!=='all'?' in this time window':''}. Times can change, so check the pool's page before you go.</p>`;
+
+  if (!data.updated && !day.pools.length){
+    html += `<div class="empty"><span class="spin">↻</span> Getting the pool schedules for the first time. This takes about a minute.</div>`;
+  } else {
+    for (const type of ['indoor','outdoor']){
+      if (ptype !== 'all' && ptype !== type) continue;
+      const tp = pools.filter(p => p.type === type);
+      if (!tp.length) continue;
+      const tr = rows.filter(x => x.p.type === type);
+      const label = type === 'indoor' ? 'Indoor pools' : 'Outdoor pools';
+      html += `<section class="section ${type==='outdoor'?'out':''}"><h3>${label} <span class="tag">${tr.length} of ${tp.length} with ${noun()}</span></h3>`;
+      if (!tr.length){
+        const offSeason = type==='outdoor' && tp.every(p => p.status !== 'ok' || !p.slots.length);
+        html += `<div class="empty">${offSeason ? 'Outdoor pools are closed for the season. They open in summer.' : `No ${noun()} match.`}</div>`;
+      } else if (view === 'timeline'){
+        html += timeline(tr, isToday);
+      } else {
+        html += `<div class="cards">` + tr.map(({p,v}) => card(p, v, isToday)).join('') + `</div>`;
+      }
+      const none = tp.filter(p => !tr.find(x=>x.p.id===p.id));
+      if (none.length && tr.length){
+        html += `<details><summary>No ${noun()} (${none.length})</summary><ul class="nolist">` +
+          none.map(p => `<li>${starBtn(p)}${poolLink(p)}
+            <span class="muted">${esc(reason(p))}</span>${p.image?`<a href="${esc(p.image)}" target="_blank" rel="noopener">schedule image</a>`:''}</li>`).join('') +
+          `</ul></details>`;
+      }
+      html += `</section>`;
+    }
+  }
+  html += statusHtml();
+  $('#content').innerHTML = html;
+}
+
+function poolLink(p){ return `<button class="pname" data-pool="${esc(p.id)}" title="See ${esc(p.name)}'s week">${esc(p.name)}</button>`; }
+
+// ---------- By pool: one pool's whole week
+function renderPool(){
+  const all = data.days[0] ? data.days[0].pools : [];
+  if (!all.length){ $('#content').innerHTML = `<div class="empty">No schedules saved yet.</div>` + statusHtml(); return; }
+  const order = [...all].sort((a,b) => (a.type===b.type?0:a.type==='indoor'?-1:1) || (favs.has(b.id)-favs.has(a.id)) || a.name.localeCompare(b.name));
+  if (!poolId || !all.find(p => p.id === poolId)) poolId = (order.find(p => favs.has(p.id)) || order[0]).id;
+  const pool = all.find(p => p.id === poolId);
+  const weeks = Math.ceil(data.days.length / 7);
+  week = Math.min(week, weeks - 1);
+  const days = data.days.slice(week*7, week*7 + 7);
+  const perDay = days.map(d => ({d, p: d.pools.find(x => x.id === poolId)}));
+  const bases = [...new Set(perDay.map(x => x.p && x.p.basis).filter(Boolean))];
+
+  let html = `<div class="picker" role="tablist">` + order.map(p =>
+      `<button class="${p.id===poolId?'on':''} ${p.type==='outdoor'?'out':''}" data-pool="${esc(p.id)}">${favs.has(p.id)?'★ ':''}${esc(p.name)}</button>`).join('') + `</div>`;
+  html += `<div class="${pool.type==='outdoor'?'out-pool':''}">
+    <div class="phead">${starBtn(pool)}<h2>${esc(pool.name)}</h2>
+      <span class="tag" style="font-size:12px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--chip-ink)">${pool.type}</span>
+      <a class="site" href="${esc(pool.url)}" target="_blank" rel="noopener">Pool website ↗</a></div>
+    <p class="sub" style="margin-bottom:2px">${esc(pool.full_name || pool.name)}</p>
+    ${addrLink(pool, true)}
+    <p class="sub">${bases.map(esc).join(' · ') || ''}</p>`;
+  const notices = noteTexts(pool.notices);
+  if (notices.length) html += `<div class="note" style="margin-bottom:8px">${notices.map(esc).join('<br>')}</div>`;
+  if (pool.image) html += `<p class="sub"><a href="${esc(pool.image)}" target="_blank" rel="noopener">Official schedule image ↗</a></p>`;
+  html += `<div class="weekbar"><div class="seg" role="group" aria-label="Week">` +
+    Array.from({length: weeks}, (_, i) => {
+      const a = data.days[i*7], b = data.days[Math.min(i*7+6, data.days.length-1)];
+      const lbl = i===0 ? 'Next 7 days' : `${fmtDate(a.date,{month:'short',day:'numeric'})} – ${fmtDate(b.date,{month:'short',day:'numeric'})}`;
+      return `<button data-week="${i}" class="${i===week?'on':''}">${lbl}</button>`; }).join('') + `</div></div>`;
+  html += `<div class="week">` + perDay.map(({d, p}) => {
+    const isToday = d.date === data.today;
+    const slots = p ? p.slots.filter(s => cats.has(catOf(s))) : [];
+    const label = isToday ? 'Today' : fmtDate(d.date,{weekday:'short'});
+    const body = slots.length ? slots.map(s => slotHtml(s, isToday)).join('')
+      : `<div class="none">${p ? esc(p.status==='ok' ? 'No ' + noun() : reason(p)) : 'No data'}</div>`;
+    const ch = p ? noteTexts(p.changes) : [];
+    const notes = ch.length ? `<div class="note">${ch.map(esc).join('<br>')}</div>` : '';
+    return `<div class="wday ${isToday?'today':''}"><h5>${label}<b>${fmtDate(d.date,{month:'short',day:'numeric'})}</b></h5>
+      <div class="slots-col">${body}</div>${notes}</div>`;
+  }).join('') + `</div></div>`;
+  html += statusHtml();
+  $('#content').innerHTML = html;
+  const on = document.querySelector('.picker button.on'); if (on && on.scrollIntoView) on.scrollIntoView({block:'nearest', inline:'center'});
+}
+
+// ---------- Map: every pool at once. Leaflet + OpenStreetMap load only when the map is first opened.
+let lmap = null, mapBox = null, mapLayer = null, mapFitted = false, leafletLoading = null;
+function loadLeaflet(){
+  if (window.L) return Promise.resolve();
+  if (leafletLoading) return leafletLoading;
+  const base = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
+  // Wait for the stylesheet too, or the map measures itself before it has its size
+  const load = (el) => new Promise((resolve, reject) => { el.onload = resolve; el.onerror = reject; document.head.appendChild(el); });
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = base + 'leaflet.min.css';
+  const js = document.createElement('script'); js.src = base + 'leaflet.min.js';
+  leafletLoading = Promise.all([load(css), load(js)]).catch(e => { leafletLoading = null; throw e; });
+  return leafletLoading;
+}
+
+function renderMap(){
+  const day = data.days[sel], isToday = day.date === data.today;
+  const pools = day.pools.filter(poolFilter).filter(p => p.lat != null && p.lng != null);
+  const rows = pools.map(p => ({p, v: visibleSlots(p, isToday)}));
+  const active = rows.filter(x => x.v.length).length;
+  $('#content').innerHTML = `<h2 class="title">${isToday?'Today · ':''}${fmtDate(day.date,{weekday:'long',month:'long',day:'numeric'})}</h2>
+    <p class="sub">${active} of ${pools.length} pools have ${noun()}${tfilter!=='all'?' in this time window':''}. Tap a pin to see its times.</p>
+    <div class="maplegend"><span><i class="lg"></i>Indoor</span><span><i class="lg out"></i>Outdoor</span>
+      <span><i class="lg off"></i>None matching</span><span>Number = how many ${noun()}</span></div>
+    <div id="mapSlot"></div>` + statusHtml();
+  if (!window.L){
+    $('#mapSlot').innerHTML = `<div class="empty"><span class="spin">↻</span> Loading the map…</div>`;
+    loadLeaflet().then(() => { if (view === 'map') render(); })
+      .catch(() => { if (view === 'map') $('#mapSlot').innerHTML = `<div class="empty">Couldn't load the map. It needs an internet connection.</div>`; });
+    return;
+  }
+  // Keep one map and move it back into the page after each redraw, so zoom and position stay put
+  if (!mapBox){ mapBox = document.createElement('div'); mapBox.id = 'map'; }
+  $('#mapSlot').appendChild(mapBox);
+  if (!lmap){
+    lmap = L.map(mapBox, {zoomSnap: 0.5});
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(lmap);
+    mapLayer = L.layerGroup().addTo(lmap);
+    lmap.on('popupopen', e => e.popup.getElement().addEventListener('click', ev => {
+      const b = ev.target.closest('[data-pool]'); if (!b) return;
+      poolId = b.dataset.pool; store.set('poolId', poolId); view = 'pool'; week = 0; sync(); window.scrollTo(0,0); render();
+    }));
+  }
+  lmap.invalidateSize();
+  mapLayer.clearLayers();
+  // Pools without matching swims first, so the active pins sit on top
+  rows.sort((a,b) => (a.v.length>0) - (b.v.length>0));
+  for (const {p, v} of rows){
+    const n = v.filter(s => !s.cancelled).length;
+    const on = v.length > 0;
+    const cls = `pin ${p.type==='outdoor'?'out':''} ${on?'':'off'} ${favs.has(p.id)?'fav':''}`;
+    const icon = on
+      ? L.divIcon({className: '', html: `<div class="${cls}"><b>${n}</b></div>`, iconSize: [30,30], iconAnchor: [15,37], popupAnchor: [0,-34]})
+      : L.divIcon({className: '', html: `<div class="${cls}"></div>`, iconSize: [14,14], iconAnchor: [7,7], popupAnchor: [0,-6]});
+    L.marker([p.lat, p.lng], {icon, title: p.name, zIndexOffset: on ? 1000 : 0, riseOnHover: true})
+      .bindPopup(() => popupHtml(p, v, isToday), {maxWidth: 290, minWidth: 220})
+      .addTo(mapLayer);
+  }
+  if (!mapFitted && pools.length){
+    mapFitted = true;
+    const bounds = L.latLngBounds(pools.map(p => [p.lat, p.lng]));
+    lmap.fitBounds(bounds, {padding: [24, 24]});
+    // once the page has laid out, measure again and re-fit
+    requestAnimationFrame(() => { lmap.invalidateSize(); lmap.fitBounds(bounds, {padding: [24, 24]}); });
+  }
+}
+
+function popupHtml(p, v, isToday){
+  const notes = noteTexts(p.changes);
+  const body = v.length ? v.map(s => slotHtml(s, isToday)).join('')
+    : `<span class="muted">${esc(p.status==='ok' ? 'No ' + noun() + ' this day' : reason(p))}</span>`;
+  return `<div class="pop"><h4>${favs.has(p.id)?'★ ':''}${esc(p.name)}</h4>
+    <div class="full">${esc(p.full_name || '')}</div>${addrLink(p, true)}
+    <div class="slots">${body}</div>
+    ${notes.length ? `<div class="note">${notes.map(esc).join('<br>')}</div>` : ''}
+    <div class="pop-links"><button class="pname" data-pool="${esc(p.id)}">See the week →</button>
+      <a href="${esc(p.url)}" target="_blank" rel="noopener">Pool website ↗</a></div></div>`;
+}
+
+function reason(p){
+  if (p.status==='no_data') return p.error || (p.type==='outdoor' ? 'closed for the season' : 'no drop-in swims posted right now');
+  if (p.status==='no_schedule') return p.basis;
+  if (p.slots.length && p.slots.every(s=>s.cancelled)) return 'cancelled';
+  if (p.slots.length) return 'none in this time window';
+  return 'none this day';
+}
+
+function starBtn(p){ const f = favs.has(p.id); return `<button class="star ${f?'fav':''}" data-fav="${esc(p.id)}" aria-label="${f?'Remove from':'Add to'} favourites">${f?'★':'☆'}</button>`; }
+
+function card(p, v, isToday){
+  const notes = noteTexts(p.changes).map(esc);
+  if (p.error) notes.push(esc(p.error));
+  return `<div class="card">
+    <h4>${starBtn(p)}${poolLink(p)}<a class="site-link" href="${esc(p.url)}" target="_blank" rel="noopener" title="Pool website">↗</a></h4>
+    ${addrLink(p)}
+    <div class="basis">${esc(p.basis||'')}</div>
+    <div class="slots">${v.map(s=>slotHtml(s,isToday)).join('')}</div>
+    ${notes.length?`<div class="note">${notes.join('<br>')}</div>`:''}
+  </div>`;
+}
+
+function timeline(rows, isToday){
+  let lo = 24*60, hi = 0;
+  rows.forEach(({v}) => v.forEach(s => { lo = Math.min(lo, s.start); hi = Math.max(hi, s.end); }));
+  lo = Math.floor(lo/60)*60; hi = Math.ceil(hi/60)*60; if (hi-lo < 360) hi = Math.min(24*60, lo+360);
+  const pct = m => ((m-lo)/(hi-lo)*100).toFixed(2)+'%';
+  let hours = '', lines = '';
+  for (let h=lo; h<=hi; h+=60){
+    const hh = h/60, lbl = hh===12?'12p':hh===24?'12a':hh>12?(hh-12)+'p':hh+'a';
+    hours += `<span style="left:${pct(h)}">${lbl}</span>`; lines += `<div class="tl-line" style="left:${pct(h)}"></div>`;
+  }
+  const nowLine = isToday && data.now_minutes>=lo && data.now_minutes<=hi ? `<div class="tl-now" style="left:${pct(data.now_minutes)}"></div>` : '';
+  return `<div class="tl"><div class="tl-grid">
+    <div class="tl-row head"><div class="tl-name"></div><div class="tl-hours">${hours}</div></div>` +
+    rows.map(({p,v}) => {
+      // One line per swim type, so a lane swim and a public swim at the same time don't overlap
+      const groups = ['lane','public','preschool','other'].map(c => [c, v.filter(s => catOf(s) === c)]).filter(g => g[1].length);
+      return groups.map(([c, vs], i) => `<div class="tl-row${i?' tl-sub':''}"><div class="tl-name" title="${esc(p.name)}">${
+          i ? `<span class="muted" style="font-weight:500;font-size:12px"><i class="dot c-${c}"></i>${esc(CAT_SHORT[c])}</span>` : poolLink(p)}</div>
+        <div class="tl-track">${lines}${nowLine}${vs.map(s=>`<div class="tl-bar c-${c} ${s.cancelled?'cancel':''}" style="left:${pct(s.start)};width:calc(${pct(s.end)} - ${pct(s.start)})" title="${esc(s.text+(s.variant?' · '+s.variant:'')+(s.note?' · '+s.note:''))}">${esc(s.text)}</div>`).join('')}</div></div>`).join('');
+    }).join('') +
+    `</div></div>`;
+}
+
+function pricesHtml(){
+  return `<details class="prices"><summary>Drop-in prices (${FEES.year})</summary>
+    <p class="sub" style="margin-top:8px">Same price at every City of Ottawa pool. Lane, public, leisure, preschool and other swims are <b>Basic</b>. Wave swims are <b>Super</b>.</p>
+    <table class="status fees"><tr><th>Per visit</th><th>Basic<span class="use">swims</span></th><th>Plus</th><th>Super<span class="use">wave swim</span></th></tr>` +
+    FEES.rows.map(r => `<tr><td>${esc(r[0])}</td>${r.slice(1).map(v => `<td>$${v.toFixed(2)}</td>`).join('')}</tr>`).join('') +
+    `</table><p class="muted" style="font-size:12px;margin:8px 0 2px">10-visit passes and memberships cost less per swim. uOttawa and Carleton set their own prices.
+    <a href="${FEES.url}" target="_blank" rel="noopener">City of Ottawa prices ↗</a></p></details>`;
+}
+
+function statusHtml(){
+  const pools = data.days[0] ? data.days[0].pools : [];
+  const bad = pools.filter(p => p.error).length;
+  const pub = data.publish;
+  const upd = data.updated ? new Date(data.updated).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  const shared = STATIC
+    ? `<p class="muted" style="font-size:12px;margin:8px 0 2px">Schedules were last downloaded ${esc(upd)}. This copy updates when the owner refreshes it; check the pool's page before you go.</p>`
+    : pub && pub.enabled
+      ? `<p style="font-size:12px;margin:8px 0 2px" class="${pub.error?'bad':'muted'}">Shared site: <a href="${esc(pub.url)}" target="_blank" rel="noopener">${esc(pub.url)}</a> · ${
+          pub.error ? esc(pub.error) : pub.last ? 'published ' + esc(new Date(pub.last).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})) : 'not published yet'}</p>`
+      : '';
+  return pricesHtml() + `<details><summary>Data sources ${bad?`<span class="muted">&nbsp;(${bad} with issues)</span>`:''}</summary>${shared}
+    <table class="status">` + pools.map(p => `<tr><td><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><br><span class="muted">${p.type}</span></td>
+      <td class="${p.error?'bad':'good'}">${p.error?esc(p.error):'OK'}</td></tr>`).join('') + `</table>
+    ${data.attribution?`<p class="muted" style="font-size:12px;margin:10px 0 2px">${esc(data.attribution)}. uOttawa and Carleton times come from their own websites (lane swims only).</p>`:''}</details>`;
+}
+
+document.addEventListener('click', e => {
+  const d = e.target.closest('.day'); if (d){ sel = +d.dataset.i; renderDays(); render(); return; }
+  const f = e.target.closest('[data-fav]');
+  if (f){ const id=f.dataset.fav; favs.has(id)?favs.delete(id):favs.add(id); store.set('favs',[...favs]); render(); return; }
+  const cb = e.target.closest('[data-cat]');
+  if (cb){ const c = cb.dataset.cat;
+    if (cats.has(c)){ if (cats.size === 1) return toast('Pick at least one swim type'); cats.delete(c); } else cats.add(c);
+    session.set('cats', [...cats]); sync(); renderDays(); render(); return; }
+  const vb = e.target.closest('[data-view]'); if (vb){ view = vb.dataset.view; store.set('view',view); sync(); render(); return; }
+  const tb = e.target.closest('[data-t]'); if (tb){ tfilter = tb.dataset.t; sync(); render(); return; }
+  const pl = e.target.closest('[data-pool]');
+  if (pl){ poolId = pl.dataset.pool; store.set('poolId', poolId); if (view !== 'pool'){ view = 'pool'; week = 0; sync(); window.scrollTo(0,0); } render(); return; }
+  const wk = e.target.closest('[data-week]'); if (wk){ week = +wk.dataset.week; render(); return; }
+  const pb = e.target.closest('[data-type]'); if (pb){ ptype = pb.dataset.type; store.set('ptype',ptype); sync(); renderDays(); render(); return; }
+});
+$('#favBtn').addEventListener('click', () => { onlyFav = !onlyFav; store.set('onlyFav', onlyFav); sync(); render(); });
+$('#q').addEventListener('input', render);
+if (STATIC) $('#refresh').remove();   // read-only copy: only the owner's server downloads schedules
+else $('#refresh').addEventListener('click', async () => {
+  try{
+    const r = await (await fetch('api/refresh',{method:'POST'})).json();
+    if (!r.started){ toast(r.reason || 'Already up to date'); return; }
+    toast('Downloading the latest schedules…');
+    data.refreshing = true; renderDays(); pollTimer = setTimeout(load, 3000);
+  }catch(e){ toast("Couldn't reach the server"); }
+});
+function sync(){
+  document.querySelectorAll('[data-cat]').forEach(b=>b.classList.toggle('on', cats.has(b.dataset.cat)));
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('on', b.dataset.view===view));
+  document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on', b.dataset.t===tfilter));
+  document.querySelectorAll('[data-type]').forEach(b=>b.classList.toggle('on', b.dataset.type===ptype));
+  $('#favBtn').classList.toggle('on', onlyFav);
+}
+// Refresh when the app comes back to the foreground (iPhone home-screen app, background tabs)
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+
+// ---------- light / dark toggle: Auto → Light → Dark
+const THEMES = {auto:['◐','Auto (matches your device)'], light:['☀︎','Light'], dark:['☾','Dark']};
+function drawTheme(){ const t = document.documentElement.dataset.theme || 'auto';
+  $('#theme').textContent = THEMES[t][0]; $('#theme').title = 'Theme: ' + THEMES[t][1] + ' — tap to change'; }
+$('#theme').addEventListener('click', () => {
+  const order = ['auto','light','dark'], cur = document.documentElement.dataset.theme || 'auto';
+  const next = order[(order.indexOf(cur)+1) % 3];
+  applyTheme(next); store.set('theme', next); drawTheme(); toast('Theme: ' + THEMES[next][1]);
+});
+drawTheme();
+sync(); load();
+setInterval(() => { if (!document.hidden) load(); }, 5*60*1000);
+</script>
+</body>
+</html>
