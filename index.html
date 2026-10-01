@@ -141,6 +141,13 @@ details[open] summary::before{transform:rotate(90deg)}
 .nolist{margin:8px 0 0;padding:0;list-style:none;font-size:14px}
 .nolist li{padding:6px 0;border-top:1px solid var(--line);display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
 .nolist li:first-child{border-top:0}
+.hide-btn{margin-left:auto;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:12px;font-weight:600;
+  min-height:26px;padding:2px 8px;border-radius:7px;line-height:1.2;flex:0 0 auto}
+.hide-btn:hover{color:var(--bad);border-color:var(--bad)}
+.hide-btn.show:hover{color:var(--teal-dark);border-color:var(--teal)}
+.card h4{align-items:center}
+.phead .hide-btn{margin-left:auto}
+.pop-links .hide-btn{margin-left:auto}
 .status{width:100%;border-collapse:collapse;margin-top:6px}
 .status td{padding:6px 6px;border-top:1px solid var(--line);font-size:13px;vertical-align:top}
 .status .bad,p.bad{color:var(--bad)}.status .good{color:var(--teal-dark)}
@@ -322,6 +329,9 @@ if (STATIC && 'serviceWorker' in navigator && window.isSecureContext) navigator.
 let poolId = store.get('poolId', null), week = 0;
 let view = store.get('view','list'), ptype = store.get('ptype','all'), tfilter = 'all', onlyFav = store.get('onlyFav', false);
 let favs = new Set(store.get('favs', []));
+// Pools you've hidden. Saved on this device only, so everyone (including the shared copy's users) picks their own.
+let hidden = new Set(store.get('hidden', []));
+function setHidden(id, on){ on ? hidden.add(id) : hidden.delete(id); store.set('hidden', [...hidden]); }
 // Swim types: Lane by default. Kept while the app is open, back to Lane next time.
 const session = {
   get(k, d){ try{ const v = sessionStorage.getItem('swimtimes.'+k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
@@ -392,7 +402,7 @@ async function load(){
 }
 
 function typeCount(d){
-  return d.pools.filter(p => (ptype === 'all' || p.type === ptype) && p.slots.some(s => !s.cancelled && cats.has(catOf(s)))).length;
+  return d.pools.filter(p => !hidden.has(p.id) && (ptype === 'all' || p.type === ptype) && p.slots.some(s => !s.cancelled && cats.has(catOf(s)))).length;
 }
 
 function renderDays(){
@@ -433,6 +443,7 @@ function slotHtml(s, isToday){
 }
 
 function poolFilter(p){
+  if (hidden.has(p.id)) return false;
   const q = $('#q').value.trim().toLowerCase();
   if (q && ![p.name, p.full_name, p.address].join(' ').toLowerCase().includes(q)) return false;
   if (onlyFav && !favs.has(p.id)) return false;
@@ -476,7 +487,7 @@ function render(){
       if (none.length && tr.length){
         html += `<details><summary>No ${noun()} (${none.length})</summary><ul class="nolist">` +
           none.map(p => `<li>${starBtn(p)}${poolLink(p)}
-            <span class="muted">${esc(reason(p))}</span>${p.image?`<a href="${esc(p.image)}" target="_blank" rel="noopener">schedule image</a>`:''}</li>`).join('') +
+            <span class="muted">${esc(reason(p))}</span>${p.image?`<a href="${esc(p.image)}" target="_blank" rel="noopener">schedule image</a>`:''}${hideBtn(p)}</li>`).join('') +
           `</ul></details>`;
       }
       html += `</section>`;
@@ -486,12 +497,25 @@ function render(){
   $('#content').innerHTML = html;
 }
 
+function hideBtn(p){ return `<button class="hide-btn" data-hide="${esc(p.id)}" title="Hide ${esc(p.name)} (you can show it again at the bottom)" aria-label="Hide ${esc(p.name)}">Hide</button>`; }
+function poolName(id){ const p = (data.days[0] ? data.days[0].pools : []).find(x => x.id === id); return p ? p.name : id; }
+function hidePool(id){ setHidden(id, true); if (poolId === id) poolId = null; renderDays(); render();
+  toast(`${poolName(id)} hidden. Show it again under "Hidden pools" at the bottom.`); }
+function hiddenHtml(){
+  if (!hidden.size) return '';
+  const known = data.days[0] ? data.days[0].pools : [];
+  const list = [...hidden].map(id => known.find(p => p.id === id) || {id, name: id}).sort((a,b) => a.name.localeCompare(b.name));
+  return `<details class="hidden-pools"><summary>Hidden pools (${hidden.size})</summary><ul class="nolist">` +
+    list.map(p => `<li><span>${esc(p.name)}</span><button class="hide-btn show" data-unhide="${esc(p.id)}">Show</button></li>`).join('') +
+    `<li><button class="hide-btn show" data-unhide="*">Show all</button></li></ul></details>`;
+}
+
 function poolLink(p){ return `<button class="pname" data-pool="${esc(p.id)}" title="See ${esc(p.name)}'s week">${esc(p.name)}</button>`; }
 
 // ---------- By pool: one pool's whole week
 function renderPool(){
-  const all = data.days[0] ? data.days[0].pools : [];
-  if (!all.length){ $('#content').innerHTML = `<div class="empty">No schedules saved yet.</div>` + statusHtml(); return; }
+  const all = (data.days[0] ? data.days[0].pools : []).filter(p => !hidden.has(p.id));
+  if (!all.length){ $('#content').innerHTML = `<div class="empty">${hidden.size ? 'All pools are hidden. Show some again under Hidden pools below.' : 'No schedules saved yet.'}</div>` + statusHtml(); return; }
   const order = [...all].sort((a,b) => (a.type===b.type?0:a.type==='indoor'?-1:1) || (favs.has(b.id)-favs.has(a.id)) || a.name.localeCompare(b.name));
   if (!poolId || !all.find(p => p.id === poolId)) poolId = (order.find(p => favs.has(p.id)) || order[0]).id;
   const pool = all.find(p => p.id === poolId);
@@ -506,7 +530,7 @@ function renderPool(){
   html += `<div class="${pool.type==='outdoor'?'out-pool':''}">
     <div class="phead">${starBtn(pool)}<h2>${esc(pool.name)}</h2>
       <span class="tag" style="font-size:12px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--chip-ink)">${pool.type}</span>
-      <a class="site" href="${esc(pool.url)}" target="_blank" rel="noopener">Pool website ↗</a></div>
+      <a class="site" href="${esc(pool.url)}" target="_blank" rel="noopener">Pool website ↗</a>${hideBtn(pool)}</div>
     <p class="sub" style="margin-bottom:2px">${esc(pool.full_name || pool.name)}</p>
     ${addrLink(pool, true)}
     <p class="sub">${bases.map(esc).join(' · ') || ''}</p>`;
@@ -573,6 +597,8 @@ function renderMap(){
       {maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(lmap);
     mapLayer = L.layerGroup().addTo(lmap);
     lmap.on('popupopen', e => e.popup.getElement().addEventListener('click', ev => {
+      const h = ev.target.closest('[data-hide]');
+      if (h){ lmap.closePopup(); hidePool(h.dataset.hide); return; }
       const b = ev.target.closest('[data-pool]'); if (!b) return;
       poolId = b.dataset.pool; store.set('poolId', poolId); view = 'pool'; week = 0; sync(); window.scrollTo(0,0); render();
     }));
@@ -610,7 +636,7 @@ function popupHtml(p, v, isToday){
     <div class="slots">${body}</div>
     ${notes.length ? `<div class="note">${notes.map(esc).join('<br>')}</div>` : ''}
     <div class="pop-links"><button class="pname" data-pool="${esc(p.id)}">See the week →</button>
-      <a href="${esc(p.url)}" target="_blank" rel="noopener">Pool website ↗</a></div></div>`;
+      <a href="${esc(p.url)}" target="_blank" rel="noopener">Pool website ↗</a>${hideBtn(p)}</div></div>`;
 }
 
 function reason(p){
@@ -627,7 +653,7 @@ function card(p, v, isToday){
   const notes = noteTexts(p.changes).map(esc);
   if (p.error) notes.push(esc(p.error));
   return `<div class="card">
-    <h4>${starBtn(p)}${poolLink(p)}<a class="site-link" href="${esc(p.url)}" target="_blank" rel="noopener" title="Pool website">↗</a></h4>
+    <h4>${starBtn(p)}${poolLink(p)}<a class="site-link" href="${esc(p.url)}" target="_blank" rel="noopener" title="Pool website">↗</a>${hideBtn(p)}</h4>
     ${addrLink(p)}
     <div class="basis">${esc(p.basis||'')}</div>
     <div class="slots">${v.map(s=>slotHtml(s,isToday)).join('')}</div>
@@ -678,7 +704,7 @@ function statusHtml(){
       ? `<p style="font-size:12px;margin:8px 0 2px" class="${pub.error?'bad':'muted'}">Shared site: <a href="${esc(pub.url)}" target="_blank" rel="noopener">${esc(pub.url)}</a> · ${
           pub.error ? esc(pub.error) : pub.last ? 'published ' + esc(new Date(pub.last).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})) : 'not published yet'}</p>`
       : '';
-  return pricesHtml() + `<details><summary>Data sources ${bad?`<span class="muted">&nbsp;(${bad} with issues)</span>`:''}</summary>${shared}
+  return hiddenHtml() + pricesHtml() + `<details><summary>Data sources ${bad?`<span class="muted">&nbsp;(${bad} with issues)</span>`:''}</summary>${shared}
     <table class="status">` + pools.map(p => `<tr><td><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><br><span class="muted">${p.type}</span></td>
       <td class="${p.error?'bad':'good'}">${p.error?esc(p.error):'OK'}</td></tr>`).join('') + `</table>
     ${data.attribution?`<p class="muted" style="font-size:12px;margin:10px 0 2px">${esc(data.attribution)}. uOttawa and Carleton times come from their own websites (lane swims only).</p>`:''}</details>`;
@@ -686,6 +712,10 @@ function statusHtml(){
 
 document.addEventListener('click', e => {
   const d = e.target.closest('.day'); if (d){ sel = +d.dataset.i; renderDays(); render(); return; }
+  const hb = e.target.closest('[data-hide]'); if (hb){ hidePool(hb.dataset.hide); return; }
+  const ub = e.target.closest('[data-unhide]');
+  if (ub){ const id = ub.dataset.unhide; if (id === '*'){ hidden.clear(); store.set('hidden', []); } else setHidden(id, false);
+    renderDays(); render(); if (hidden.size){ const d = document.querySelector('details.hidden-pools'); if (d) d.open = true; } return; }
   const f = e.target.closest('[data-fav]');
   if (f){ const id=f.dataset.fav; favs.has(id)?favs.delete(id):favs.add(id); store.set('favs',[...favs]); render(); return; }
   const cb = e.target.closest('[data-cat]');
