@@ -1070,14 +1070,7 @@ function icsText(i){
     'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).map(icsFold).join('\r\n') + '\r\n';
 }
 function addToCalendar(i){
-  if (!STATIC){
-    // The server hands the phone a real calendar file, which iPhones open straight in Calendar
-    const q = new URLSearchParams({t: i.title + ' · ' + i.p.name, s: utcStamp(i.start), e: utcStamp(i.end), l: i.where,
-      d: [i.s.note, i.p.url].filter(Boolean).join('\n'), id: `${i.p.id}-${i.date}-${i.s.start}`});
-    const url = 'api/ics?' + q;
-    if (!window.open(url, '_blank')) location.href = url;
-    return;
-  }
+  // Built right here on the phone (same as the shared copy), which iPhones open straight in Calendar
   const blob = new Blob([icsText(i)], {type: 'text/calendar;charset=utf-8'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = `${i.p.name} ${i.date}.ics`.replace(/[^\w .-]+/g, '');
