@@ -259,6 +259,270 @@ html.dark .pop-links .pname{color:#8cc3ff}
   #map{height:min(62vh,540px)}
 }
 </style>
+<script id="appfeel-config">window.APPFEEL = {app: 'swim', pull: true, pressSkip: '#map', place: function(){ return view + '|' + (view === 'pool' ? poolId : sel); }};</script>
+<style id="appfeel-css">
+/* App feel: makes the page behave more like an installed app. */
+/* No grey flash when tapping */
+*{-webkit-tap-highlight-color:transparent}
+/* No rubber-band bounce or browser pull-to-refresh */
+html,body{overscroll-behavior:none}
+/* Phones and tablets: holding a button or card doesn't select text or pop up a menu.
+   Typing boxes still work normally. */
+@media (hover:none) and (pointer:coarse){
+  body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  input,textarea,select,[contenteditable],[contenteditable] *,.af-selectable,.af-selectable *{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+  img{-webkit-user-drag:none}
+}
+/* Press feedback */
+.af-press{opacity:.6!important;transition:none!important}
+.af-press.af-small{transform:scale(.96)!important}
+.af-fade{transition:opacity .18s ease,transform .18s ease!important}
+@media (prefers-reduced-motion:reduce){.af-press.af-small{transform:none!important}}
+/* "New version available" banner */
+.af-update{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translate(-50%,140%);z-index:9000;
+  display:flex;align-items:center;gap:10px;max-width:calc(100vw - 24px);padding:8px 8px 8px 16px;border-radius:14px;
+  background:#1f2933;color:#fff;font:600 14px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  box-shadow:0 8px 28px rgba(0,0,0,.35);transition:transform .25s ease;-webkit-user-select:none;user-select:none}
+.af-update.show{transform:translate(-50%,0)}
+.af-update button{font:inherit;border:0;border-radius:10px;cursor:pointer}
+.af-update .af-go{background:#fff;color:#1f2933;padding:8px 14px;white-space:nowrap}
+.af-update .af-x{background:transparent;color:#fff;opacity:.7;padding:8px 8px;font-size:16px;line-height:1}
+/* Pull to refresh */
+.af-pull{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 8px);z-index:8999;width:36px;height:36px;margin-left:-18px;
+  border-radius:50%;background:#fff;color:#1f2933;box-shadow:0 3px 12px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;
+  font:700 20px/1 -apple-system,BlinkMacSystemFont,sans-serif;opacity:0;transform:translateY(-60px);pointer-events:none}
+.af-pull.ready{color:#0a7d6f}
+.af-pull.spin span{animation:af-spin .8s linear infinite}
+@keyframes af-spin{to{transform:rotate(360deg)}}
+
+/* Tap a swim for Share / Add to Calendar */
+.slot[data-slot],.tl-bar[data-slot]{cursor:pointer}
+.slotsheet{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center}
+.slotsheet.show{display:flex}
+.slotsheet .box{background:var(--panel);color:var(--ink);width:100%;max-width:520px;border-radius:18px 18px 0 0;
+  padding:10px 18px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.25);animation:ss-up .2s ease}
+@keyframes ss-up{from{transform:translateY(40px);opacity:.4}}
+.slotsheet .grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.slotsheet h3{margin:0 0 4px;font-size:19px}
+.slotsheet p{margin:2px 0;color:var(--muted)}
+.slotsheet .ss-when{color:var(--ink);font-weight:650;font-size:16px}
+.slotsheet .ss-note{color:var(--warn);font-size:13px;margin-top:6px}
+.slotsheet .ss-cancel{color:var(--bad);font-weight:700}
+.slotsheet .ss-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 8px}
+.slotsheet .ss-actions button,.slotsheet .ss-actions a{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;
+  border-radius:12px;border:1px solid var(--line);background:var(--chip);color:var(--chip-ink);font-weight:650;font-size:15px;text-decoration:none}
+.slotsheet .ss-actions .primary{background:var(--blue);border-color:var(--blue);color:#fff}
+html.dark .slotsheet .ss-actions .primary{background:var(--bar);border-color:var(--bar)}
+.slotsheet .ss-close{width:100%;min-height:44px;background:transparent;color:var(--muted);font-weight:600}
+</style>
+<script id="appfeel-js">
+// App feel: press feedback, remembering your place, keep-screen-on, pull to refresh and a
+// "new version available" banner. Settings come from window.APPFEEL, set just before this script.
+(function(){
+  var cfg = window.APPFEEL || {};
+  var app = cfg.app || 'app';
+  var doc = document, root = doc.documentElement;
+  function get(k){ try{ var v = localStorage.getItem('appfeel.' + app + '.' + k); return v === null ? null : JSON.parse(v); }catch(e){ return null; } }
+  function set(k, v){ try{ localStorage.setItem('appfeel.' + app + '.' + k, JSON.stringify(v)); }catch(e){} }
+  var api = window.AppFeel = { onPull: null, get: get, set: set };
+
+  // iPhone only shows :active styles when the page listens for touches
+  doc.addEventListener('touchstart', function(){}, {passive:true});
+
+  // ---------- remember the screen you were on (apps whose screens live in the address, like #/c/...)
+  if (cfg.hashRoute){
+    var saved = get('hash');
+    if ((!location.hash || location.hash === '#') && saved && saved.h && saved.h !== '#/' && Date.now() - saved.t < 7*864e5){
+      try{ history.replaceState(history.state, '', saved.h); }catch(e){}
+    }
+    var saveHash = function(){ set('hash', {h: location.hash || '#/', t: Date.now()}); };
+    window.addEventListener('hashchange', saveHash);
+    window.addEventListener('popstate', saveHash);
+    setInterval(function(){ if (!doc.hidden) saveHash(); }, 2000);
+    doc.addEventListener('visibilitychange', function(){ if (doc.hidden) saveHash(); });
+    window.addEventListener('pagehide', saveHash);
+  }
+
+  // ---------- remember how far down you'd scrolled
+  // The app calls AppFeel.restoreScroll() once its first screen is drawn.
+  var scrollReady = false;
+  function scroller(){ return cfg.scroller ? doc.querySelector(cfg.scroller) : null; }
+  function place(){ try{ var f = api.place || cfg.place; return f ? String(f()) : location.hash; }catch(e){ return ''; } }
+  function curY(){ var s = scroller(); return s ? s.scrollTop : (window.scrollY || root.scrollTop || 0); }
+  function saveScroll(){ if (scrollReady) set('scroll', {y: Math.round(curY()), p: place(), t: Date.now()}); }
+  api.restoreScroll = function(){
+    if (scrollReady) return;
+    scrollReady = true;
+    var s = get('scroll');
+    if (!s || !s.y || s.p !== place() || Date.now() - s.t > 12*36e5) return;
+    var tries = 0;
+    (function go(){
+      var el = scroller();
+      if (el) el.scrollTop = s.y; else window.scrollTo(0, s.y);
+      if (Math.abs(curY() - s.y) > 4 && ++tries < 180) requestAnimationFrame(go);
+    })();
+  };
+  setTimeout(function(){ scrollReady = true; }, 8000);   // in case the app never calls it
+  var scrollTimer = null;
+  doc.addEventListener('scroll', function(){ clearTimeout(scrollTimer); scrollTimer = setTimeout(saveScroll, 300); }, true);
+  doc.addEventListener('visibilitychange', function(){ if (doc.hidden) saveScroll(); });
+  window.addEventListener('pagehide', saveScroll);
+
+  // ---------- press feedback: whatever you're touching dims (and small buttons shrink) a little
+  var pressed = null, pressX = 0, pressY = 0, reduced = false;
+  try{ reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+  var SKIP = 'input,textarea,select,video,canvas,.leaflet-container' + (cfg.pressSkip ? ',' + cfg.pressSkip : '');
+  var TAPPABLE = 'button,a[href],[role=button],[role=tab],summary,label[for],[onclick],.af-pressable';
+  function findTarget(t){
+    if (!t || !t.closest || t.closest(SKIP)) return null;
+    var el = t.closest(TAPPABLE);
+    if (!el){
+      for (var n = t, i = 0; n && n !== doc.body && i < 6; n = n.parentElement, i++){
+        if (getComputedStyle(n).cursor === 'pointer'){ el = n; break; }
+      }
+    }
+    if (!el || el === doc.body || el.disabled) return null;
+    var r = el.getBoundingClientRect();
+    if (r.width * r.height > innerWidth * innerHeight * 0.45) return null;   // whole panels don't dim
+    return el;
+  }
+  function release(now){
+    var el = pressed; pressed = null;
+    if (!el) return;
+    setTimeout(function(){
+      el.classList.remove('af-press', 'af-small'); el.classList.add('af-fade');
+      setTimeout(function(){ el.classList.remove('af-fade'); }, 220);
+    }, now ? 0 : 90);
+  }
+  doc.addEventListener('pointerdown', function(e){
+    if (e.pointerType === 'mouse' || !e.isPrimary) return;
+    release(true);
+    var el = findTarget(e.target);
+    if (!el) return;
+    pressed = el; pressX = e.clientX; pressY = e.clientY;
+    el.classList.add('af-press');
+    var r = el.getBoundingClientRect();
+    if (!reduced && r.height <= 64 && r.width <= innerWidth * 0.6 && getComputedStyle(el).transform === 'none') el.classList.add('af-small');
+  }, true);
+  doc.addEventListener('pointermove', function(e){
+    if (pressed && Math.abs(e.clientX - pressX) + Math.abs(e.clientY - pressY) > 10) release(true);
+  }, true);
+  doc.addEventListener('pointerup', function(){ release(false); }, true);
+  doc.addEventListener('pointercancel', function(){ release(true); }, true);
+  doc.addEventListener('scroll', function(){ release(true); }, true);
+
+  // ---------- keep the screen on while the app is open
+  if (cfg.wake){
+    var lock = null, video = null, armed = false;
+    var playVideo = function(){
+      armed = false;
+      if (!video){
+        video = doc.createElement('video');
+        video.setAttribute('playsinline', ''); video.setAttribute('muted', ''); video.muted = true; video.loop = true;
+        video.setAttribute('aria-hidden', 'true'); video.title = 'Keeping the screen on';
+        video.style.cssText = 'position:fixed;left:-10px;top:-10px;width:1px;height:1px;opacity:0;pointer-events:none';
+        (cfg.wakeMedia || []).forEach(function(m){ var s = doc.createElement('source'); s.src = m[0]; s.type = m[1]; video.appendChild(s); });
+        doc.body.appendChild(video);
+      }
+      var p = video.play(); if (p && p.catch) p.catch(function(){});
+    };
+    // Older iPhones and plain-http addresses don't have the screen-lock setting, so a tiny silent
+    // video plays instead. Phones only allow that after a tap, so it starts on your next tap.
+    var arm = function(){
+      if (armed) return; armed = true;
+      var go = function(){ doc.removeEventListener('pointerdown', go, true); doc.removeEventListener('click', go, true); if (!doc.hidden) playVideo(); };
+      doc.addEventListener('pointerdown', go, true); doc.addEventListener('click', go, true);
+    };
+    var wakeOn = function(){
+      if (doc.hidden || lock) return;
+      if (navigator.wakeLock && navigator.wakeLock.request){
+        navigator.wakeLock.request('screen').then(function(l){
+          lock = l; l.addEventListener('release', function(){ lock = null; });
+        }).catch(arm);
+      } else arm();
+    };
+    doc.addEventListener('visibilitychange', function(){ if (!doc.hidden) wakeOn(); });
+    wakeOn();
+  }
+
+  // ---------- pull down at the top to refresh (apps that set AppFeel.onPull)
+  if (cfg.pull){
+    var pull = null, startY = 0, startX = 0, dist = 0, busy = false, ind = null;
+    var PULL_SKIP = '.leaflet-container,#map,[role=dialog],.sheet,.modal-backdrop' + (cfg.pullSkip ? ',' + cfg.pullSkip : '');
+    var indicator = function(){
+      if (!ind){ ind = doc.createElement('div'); ind.className = 'af-pull'; ind.innerHTML = '<span>↓</span>'; doc.body.appendChild(ind); }
+      return ind;
+    };
+    var draw = function(d){
+      var i = indicator(), y = Math.min(d, 80);
+      i.style.opacity = Math.min(1, d / 50); i.style.transform = 'translateY(' + (y - 50) + 'px) rotate(' + (y * 3) + 'deg)';
+      i.classList.toggle('ready', d >= 70); i.firstChild.textContent = d >= 70 ? '↻' : '↓';
+    };
+    var hide = function(){ if (!ind) return; ind.style.transition = 'opacity .2s, transform .2s'; ind.style.opacity = 0; ind.style.transform = 'translateY(-60px)';
+      setTimeout(function(){ if (ind){ ind.style.transition = ''; ind.classList.remove('spin', 'ready'); } }, 220); };
+    doc.addEventListener('touchstart', function(e){
+      if (busy || e.touches.length !== 1 || curY() > 0 || !api.onPull) return;
+      if (e.target.closest && e.target.closest(PULL_SKIP)) return;
+      pull = true; startY = e.touches[0].clientY; startX = e.touches[0].clientX; dist = 0;
+    }, {passive:true});
+    doc.addEventListener('touchmove', function(e){
+      if (!pull) return;
+      var dy = e.touches[0].clientY - startY, dx = Math.abs(e.touches[0].clientX - startX);
+      if (dx > dy && !dist){ pull = null; return; }               // sideways swipe, not a pull
+      if (dy <= 0 || curY() > 0){ if (dist) hide(); dist = 0; return; }
+      dist = dy * 0.5; draw(dist);
+    }, {passive:true});
+    doc.addEventListener('touchend', function(){
+      if (!pull) return; pull = null;
+      if (dist < 70){ hide(); dist = 0; return; }
+      dist = 0; busy = true;
+      var i = indicator(); i.classList.add('spin'); i.firstChild.textContent = '↻';
+      i.style.transform = 'translateY(14px)'; i.style.opacity = 1;
+      Promise.resolve().then(function(){ return api.onPull(); }).catch(function(){}).then(function(){
+        setTimeout(function(){ busy = false; hide(); }, 400);
+      });
+    }, {passive:true});
+  }
+
+  // ---------- "New version available": notices when the app's files change on the server
+  var base = null, lastCheck = 0, checking = false, shown = false;
+  function files(){
+    var list = [location.pathname + location.search];
+    var add = function(u){ try{ var x = new URL(u, location.href); if (x.origin === location.origin) list.push(x.pathname + x.search); }catch(e){} };
+    Array.prototype.forEach.call(doc.querySelectorAll('script[src]'), function(s){ add(s.getAttribute('src')); });
+    Array.prototype.forEach.call(doc.querySelectorAll('link[rel=stylesheet][href]'), function(l){ add(l.getAttribute('href')); });
+    return list;
+  }
+  function hash(str){ var h = 2166136261; for (var i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + ':' + str.length; }
+  function signature(){
+    return Promise.all(files().map(function(u){
+      return fetch(u, {cache: 'no-store', credentials: 'same-origin'}).then(function(r){ if (!r.ok) throw new Error(r.status); return r.text(); });
+    })).then(function(texts){ return hash(texts.join('\u0000')); });
+  }
+  function showBanner(){
+    if (shown) return; shown = true;
+    var b = doc.createElement('div');
+    b.className = 'af-update'; b.setAttribute('role', 'status');
+    b.innerHTML = '<span>New version available</span><button class="af-go" type="button">Update</button><button class="af-x" type="button" aria-label="Not now">✕</button>';
+    b.querySelector('.af-go').addEventListener('click', function(){ location.reload(); });
+    b.querySelector('.af-x').addEventListener('click', function(){ b.classList.remove('show'); });
+    doc.body.appendChild(b);
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ b.classList.add('show'); }); });
+  }
+  function check(){
+    if (checking || shown || doc.hidden || !navigator.onLine) return;
+    checking = true; lastCheck = Date.now();
+    signature().then(function(s){
+      if (!base) base = s;
+      else if (s !== base) showBanner();
+    }).catch(function(){}).then(function(){ checking = false; });
+  }
+  setTimeout(check, 3000);
+  setInterval(check, 15*60*1000);
+  doc.addEventListener('visibilitychange', function(){ if (!doc.hidden && Date.now() - lastCheck > 60000) check(); });
+  api.checkForUpdate = check;
+})();
+</script>
 </head>
 <body>
 <header>
@@ -326,8 +590,8 @@ let data = null, sel = 0, pollTimer = null, wasRefreshing = false;
 // The shared GitHub Pages copy is read-only: it reads data.json that the owner's server publishes
 const STATIC = document.documentElement.dataset.static === '1';
 if (STATIC && 'serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
-let poolId = store.get('poolId', null), week = 0;
-let view = store.get('view','list'), ptype = store.get('ptype','all'), tfilter = 'all', onlyFav = store.get('onlyFav', false);
+let poolId = store.get('poolId', null), week = store.get('week', 0), dayRestored = false;
+let view = store.get('view','list'), ptype = store.get('ptype','all'), tfilter = store.get('tfilter','all'), onlyFav = store.get('onlyFav', false);
 let favs = new Set(store.get('favs', []));
 // Pools you've hidden. Saved on this device only, so everyone (including the shared copy's users) picks their own.
 let hidden = new Set(store.get('hidden', []));
@@ -396,8 +660,12 @@ async function load(){
     $('#content').innerHTML = `<div class="empty">No schedules for the coming days yet. They'll appear after the next update.</div>`;
     return;
   }
+  if (!dayRestored){ dayRestored = true;   // same day you were looking at, if it's still today
+    const sd = store.get('day', null);
+    if (sd && sd.today === data.today){ const i = data.days.findIndex(x => x.date === sd.d); if (i >= 0) sel = i; } }
   if (sel >= data.days.length) sel = 0;
   renderDays(); render();
+  if (window.AppFeel) AppFeel.restoreScroll();
   if (data.refreshing || !data.updated) pollTimer = setTimeout(load, 4000);
 }
 
@@ -426,7 +694,7 @@ function visibleSlots(p, isToday){
   return p.slots.filter(s => cats.has(catOf(s))).filter(f);
 }
 
-function slotHtml(s, isToday){
+function slotHtml(s, isToday, p, date){
   const nowM = data.now_minutes;
   let cls = 'slot';
   if (s.cancelled) cls += ' cancel';
@@ -439,7 +707,7 @@ function slotHtml(s, isToday){
   const desc = cat === 'lane' && !onlyLane() ? ['Lane swim', s.variant].filter(Boolean).join(' · ') : s.variant;
   const rate = /wave swim/i.test(s.variant || '') ? 'Super rate' : '';
   const extra = [desc, s.note, rate, s.cancelled?'cancelled':''].filter(Boolean).join(' · ');
-  return `<div class="${cls}"${s.changed?` title="${esc(s.changed)}"`:''}>${esc(s.text)}${extra?`<small>${esc(extra)}</small>`:''}</div>`;
+  return `<div class="${cls}"${slotRef(p, date, s)}${s.changed?` title="${esc(s.changed)}"`:''}>${esc(s.text)}${extra?`<small>${esc(extra)}</small>`:''}</div>`;
 }
 
 function poolFilter(p){
@@ -453,6 +721,7 @@ function poolFilter(p){
 
 function render(){
   if (!data) return;
+  SLOTS.clear();
   document.body.classList.toggle('pool-mode', view === 'pool');
   if (view === 'pool') return renderPool();
   if (view === 'map') return renderMap();
@@ -463,7 +732,7 @@ function render(){
   rows.sort((a,b)=> (favs.has(b.p.id)-favs.has(a.p.id)) || nextStart(a)-nextStart(b) || a.p.name.localeCompare(b.p.name));
 
   let html = `<h2 class="title">${isToday?'Today · ':''}${fmtDate(day.date,{weekday:'long',month:'long',day:'numeric'})}</h2>
-    <p class="sub">${rows.length} of ${pools.length} pools have ${noun()}${tfilter!=='all'?' in this time window':''}. Times can change, so check the pool's page before you go.</p>`;
+    <p class="sub">${rows.length} of ${pools.length} pools have ${noun()}${tfilter!=='all'?' in this time window':''}. Times can change, so check the pool's page before you go. Tap a swim to share it or add it to your calendar.</p>`;
 
   if (!data.updated && !day.pools.length){
     html += `<div class="empty"><span class="spin">↻</span> Getting the pool schedules for the first time. This takes about a minute.</div>`;
@@ -479,9 +748,9 @@ function render(){
         const offSeason = type==='outdoor' && tp.every(p => p.status !== 'ok' || !p.slots.length);
         html += `<div class="empty">${offSeason ? 'Outdoor pools are closed for the season. They open in summer.' : `No ${noun()} match.`}</div>`;
       } else if (view === 'timeline'){
-        html += timeline(tr, isToday);
+        html += timeline(tr, isToday, day.date);
       } else {
-        html += `<div class="cards">` + tr.map(({p,v}) => card(p, v, isToday)).join('') + `</div>`;
+        html += `<div class="cards">` + tr.map(({p,v}) => card(p, v, isToday, day.date)).join('') + `</div>`;
       }
       const none = tp.filter(p => !tr.find(x=>x.p.id===p.id));
       if (none.length && tr.length){
@@ -546,7 +815,7 @@ function renderPool(){
     const isToday = d.date === data.today;
     const slots = p ? p.slots.filter(s => cats.has(catOf(s))) : [];
     const label = isToday ? 'Today' : fmtDate(d.date,{weekday:'short'});
-    const body = slots.length ? slots.map(s => slotHtml(s, isToday)).join('')
+    const body = slots.length ? slots.map(s => slotHtml(s, isToday, p, d.date)).join('')
       : `<div class="none">${p ? esc(p.status==='ok' ? 'No ' + noun() : reason(p)) : 'No data'}</div>`;
     const ch = p ? noteTexts(p.changes) : [];
     const notes = ch.length ? `<div class="note">${ch.map(esc).join('<br>')}</div>` : '';
@@ -600,7 +869,7 @@ function renderMap(){
       const h = ev.target.closest('[data-hide]');
       if (h){ lmap.closePopup(); hidePool(h.dataset.hide); return; }
       const b = ev.target.closest('[data-pool]'); if (!b) return;
-      poolId = b.dataset.pool; store.set('poolId', poolId); view = 'pool'; week = 0; sync(); window.scrollTo(0,0); render();
+      poolId = b.dataset.pool; store.set('poolId', poolId); view = 'pool'; week = 0; store.set('week', 0); sync(); window.scrollTo(0,0); render();
     }));
   }
   lmap.invalidateSize();
@@ -629,7 +898,7 @@ function renderMap(){
 
 function popupHtml(p, v, isToday){
   const notes = noteTexts(p.changes);
-  const body = v.length ? v.map(s => slotHtml(s, isToday)).join('')
+  const body = v.length ? v.map(s => slotHtml(s, isToday, p, data.days[sel].date)).join('')
     : `<span class="muted">${esc(p.status==='ok' ? 'No ' + noun() + ' this day' : reason(p))}</span>`;
   return `<div class="pop"><h4>${favs.has(p.id)?'★ ':''}${esc(p.name)}</h4>
     <div class="full">${esc(p.full_name || '')}</div>${addrLink(p, true)}
@@ -649,19 +918,19 @@ function reason(p){
 
 function starBtn(p){ const f = favs.has(p.id); return `<button class="star ${f?'fav':''}" data-fav="${esc(p.id)}" aria-label="${f?'Remove from':'Add to'} favourites">${f?'★':'☆'}</button>`; }
 
-function card(p, v, isToday){
+function card(p, v, isToday, date){
   const notes = noteTexts(p.changes).map(esc);
   if (p.error) notes.push(esc(p.error));
   return `<div class="card">
     <h4>${starBtn(p)}${poolLink(p)}<a class="site-link" href="${esc(p.url)}" target="_blank" rel="noopener" title="Pool website">↗</a>${hideBtn(p)}</h4>
     ${addrLink(p)}
     <div class="basis">${esc(p.basis||'')}</div>
-    <div class="slots">${v.map(s=>slotHtml(s,isToday)).join('')}</div>
+    <div class="slots">${v.map(s=>slotHtml(s,isToday,p,date)).join('')}</div>
     ${notes.length?`<div class="note">${notes.join('<br>')}</div>`:''}
   </div>`;
 }
 
-function timeline(rows, isToday){
+function timeline(rows, isToday, date){
   let lo = 24*60, hi = 0;
   rows.forEach(({v}) => v.forEach(s => { lo = Math.min(lo, s.start); hi = Math.max(hi, s.end); }));
   lo = Math.floor(lo/60)*60; hi = Math.ceil(hi/60)*60; if (hi-lo < 360) hi = Math.min(24*60, lo+360);
@@ -679,7 +948,7 @@ function timeline(rows, isToday){
       const groups = ['lane','public','preschool','other'].map(c => [c, v.filter(s => catOf(s) === c)]).filter(g => g[1].length);
       return groups.map(([c, vs], i) => `<div class="tl-row${i?' tl-sub':''}"><div class="tl-name" title="${esc(p.name)}">${
           i ? `<span class="muted" style="font-weight:500;font-size:12px"><i class="dot c-${c}"></i>${esc(CAT_SHORT[c])}</span>` : poolLink(p)}</div>
-        <div class="tl-track">${lines}${nowLine}${vs.map(s=>`<div class="tl-bar c-${c} ${s.cancelled?'cancel':''}" style="left:${pct(s.start)};width:calc(${pct(s.end)} - ${pct(s.start)})" title="${esc(s.text+(s.variant?' · '+s.variant:'')+(s.note?' · '+s.note:''))}">${esc(s.text)}</div>`).join('')}</div></div>`).join('');
+        <div class="tl-track">${lines}${nowLine}${vs.map(s=>`<div class="tl-bar c-${c} ${s.cancelled?'cancel':''}"${slotRef(p, date, s)} style="left:${pct(s.start)};width:calc(${pct(s.end)} - ${pct(s.start)})" title="${esc(s.text+(s.variant?' · '+s.variant:'')+(s.note?' · '+s.note:''))}">${esc(s.text)}</div>`).join('')}</div></div>`).join('');
     }).join('') +
     `</div></div>`;
 }
@@ -710,8 +979,125 @@ function statusHtml(){
     ${data.attribution?`<p class="muted" style="font-size:12px;margin:10px 0 2px">${esc(data.attribution)}. uOttawa and Carleton times come from their own websites (lane swims only).</p>`:''}</details>`;
 }
 
+// ---------- Tap a swim: share it, add it to your calendar, or get directions
+const SLOTS = new Map(); let slotSeq = 0;
+function slotRef(p, date, s){ if (!p || !date) return ''; const id = ++slotSeq; SLOTS.set(id, {p, date, s}); return ` data-slot="${id}"`; }
+const TZ = 'America/Toronto';
+const TZFMT = new Intl.DateTimeFormat('en-US', {timeZone: TZ, hourCycle: 'h23', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+function ottawaTime(date, mins){   // that Ottawa clock time as a real moment (handles daylight saving)
+  const [y, m, d] = date.split('-').map(Number);
+  const want = Date.UTC(y, m-1, d, Math.floor(mins/60), mins % 60);
+  let t = want;
+  for (let i = 0; i < 2; i++){
+    const o = {}; TZFMT.formatToParts(new Date(t)).forEach(x => o[x.type] = x.value);
+    t += want - Date.UTC(+o.year, +o.month-1, +o.day, +o.hour % 24, +o.minute);
+  }
+  return new Date(t);
+}
+const utcStamp = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+function clock(m){ const h = Math.floor(m/60) % 24, mm = String(m % 60).padStart(2, '0'); return `${(h + 11) % 12 + 1}:${mm} ${h < 12 ? 'a.m.' : 'p.m.'}`; }
+function slotInfo(id){
+  const x = SLOTS.get(id); if (!x) return null;
+  const {p, date, s} = x, cat = catOf(s);
+  const kind = {lane:'Lane swim', public:'Public swim', preschool:'Preschool swim', other:'Swim'}[cat] || 'Swim';
+  const title = cat === 'lane' ? ['Lane swim', s.variant].filter(Boolean).join(' · ') : (s.variant || kind);
+  const day = fmtDate(date, {weekday:'long', month:'long', day:'numeric'});
+  const time = `${clock(s.start)} – ${clock(s.end)}`;
+  const place = p.full_name || p.name;
+  const where = [place, p.address].filter(Boolean).join(', ');
+  const link = STATIC ? location.href.split('#')[0] : (data.publish && data.publish.enabled && data.publish.url) || '';
+  return {p, s, title, day, time, place, where, link, cancelled: s.cancelled,
+          start: ottawaTime(date, s.start), end: ottawaTime(date, s.end), date};
+}
+let sheetSlot = null;
+function sheetEl(){
+  let el = $('#slotSheet'); if (el) return el;
+  el = document.createElement('div'); el.id = 'slotSheet'; el.className = 'slotsheet';
+  el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'ssTitle');
+  el.innerHTML = `<div class="box"><div class="grab"></div><h3 id="ssTitle"></h3><p class="ss-when"></p><p class="ss-where"></p><p class="ss-note"></p>
+    <div class="ss-actions"><button class="primary" data-ss="share">⤴&#xFE0E; Share</button><button data-ss="ics">📅 Add to Calendar</button>
+      <button data-ss="google">Google Calendar</button><a data-ss="map" target="_blank" rel="noopener">📍 Directions</a></div>
+    <button class="ss-close" data-ss="close">Close</button></div>`;
+  document.body.appendChild(el);
+  el.addEventListener('click', e => { if (e.target === el) closeSlot(); });
+  return el;
+}
+function openSlot(id){
+  const i = slotInfo(id); if (!i) return;
+  sheetSlot = i;
+  const el = sheetEl();
+  el.querySelector('#ssTitle').textContent = i.title + ' · ' + i.p.name;
+  el.querySelector('.ss-when').textContent = `${i.day} · ${i.time}`;
+  el.querySelector('.ss-where').textContent = i.where;
+  const note = [i.s.note, /wave swim/i.test(i.s.variant || '') ? 'Super rate' : ''].filter(Boolean).join(' · ');
+  const n = el.querySelector('.ss-note');
+  n.innerHTML = i.cancelled ? '<span class="ss-cancel">This swim is cancelled.</span>' : esc(note);
+  el.querySelector('[data-ss="ics"]').hidden = el.querySelector('[data-ss="google"]').hidden = !!i.cancelled;
+  el.querySelector('[data-ss="map"]').href = mapsUrl(i.p);
+  el.classList.add('show');
+}
+function closeSlot(){ const el = $('#slotSheet'); if (el) el.classList.remove('show'); sheetSlot = null; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSlot(); });
+function shareText(i){
+  return `${i.title} at ${i.place}\n${i.day}, ${i.time}${i.cancelled ? ' (cancelled)' : ''}${i.p.address ? '\n' + i.p.address : ''}`;
+}
+function copyText(t){
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
+  // Plain-http addresses can't use the clipboard API; this older way still works
+  const ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta);
+  ta.select(); ta.setSelectionRange(0, t.length);
+  const ok = document.execCommand('copy'); ta.remove();
+  return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+}
+async function shareSlot(i){
+  const text = shareText(i);
+  if (navigator.share){
+    try{ await navigator.share(i.link ? {title: i.title, text, url: i.link} : {title: i.title, text}); return; }
+    catch(e){ if (e && e.name === 'AbortError') return; }
+  }
+  try{ await copyText(text + (i.link ? '\n' + i.link : '')); toast('Copied. Paste it into a message.'); }
+  catch(e){ toast("Couldn't share from this browser"); }
+}
+function icsEsc(t){ return String(t || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
+function icsFold(line){ const out = []; while (line.length > 74){ out.push(line.slice(0, 74)); line = ' ' + line.slice(74); } out.push(line); return out.join('\r\n'); }
+function icsText(i){
+  const desc = [i.s.note, 'Times can change, so check the pool\'s page before you go.', i.p.url].filter(Boolean).join('\n');
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Swim Times//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+    `UID:${i.p.id}-${i.date}-${i.s.start}@swim-times`, `DTSTAMP:${utcStamp(new Date())}`,
+    `DTSTART:${utcStamp(i.start)}`, `DTEND:${utcStamp(i.end)}`, `SUMMARY:${icsEsc(i.title + ' · ' + i.p.name)}`,
+    `LOCATION:${icsEsc(i.where)}`, `DESCRIPTION:${icsEsc(desc)}`, i.p.url ? `URL:${i.p.url}` : '',
+    'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).map(icsFold).join('\r\n') + '\r\n';
+}
+function addToCalendar(i){
+  if (!STATIC){
+    // The server hands the phone a real calendar file, which iPhones open straight in Calendar
+    const q = new URLSearchParams({t: i.title + ' · ' + i.p.name, s: utcStamp(i.start), e: utcStamp(i.end), l: i.where,
+      d: [i.s.note, i.p.url].filter(Boolean).join('\n'), id: `${i.p.id}-${i.date}-${i.s.start}`});
+    const url = 'api/ics?' + q;
+    if (!window.open(url, '_blank')) location.href = url;
+    return;
+  }
+  const blob = new Blob([icsText(i)], {type: 'text/calendar;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `${i.p.name} ${i.date}.ics`.replace(/[^\w .-]+/g, '');
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+function googleCalendar(i){
+  const q = new URLSearchParams({action: 'TEMPLATE', text: i.title + ' · ' + i.p.name,
+    dates: utcStamp(i.start) + '/' + utcStamp(i.end), location: i.where, details: [i.s.note, i.p.url].filter(Boolean).join('\n')});
+  window.open('https://calendar.google.com/calendar/render?' + q, '_blank', 'noopener');
+}
+
 document.addEventListener('click', e => {
-  const d = e.target.closest('.day'); if (d){ sel = +d.dataset.i; renderDays(); render(); return; }
+  const ss = e.target.closest('[data-ss]');
+  if (ss){ const i = sheetSlot, a = ss.dataset.ss;
+    if (a === 'close' || !i) return closeSlot();
+    if (a === 'share') shareSlot(i); else if (a === 'ics') addToCalendar(i); else if (a === 'google') googleCalendar(i);
+    return; }
+  const sl = e.target.closest('[data-slot]'); if (sl){ openSlot(+sl.dataset.slot); return; }
+  const d = e.target.closest('.day'); if (d){ sel = +d.dataset.i; store.set('day', {d: data.days[sel].date, today: data.today}); renderDays(); render(); return; }
   const hb = e.target.closest('[data-hide]'); if (hb){ hidePool(hb.dataset.hide); return; }
   const ub = e.target.closest('[data-unhide]');
   if (ub){ const id = ub.dataset.unhide; if (id === '*'){ hidden.clear(); store.set('hidden', []); } else setHidden(id, false);
@@ -723,10 +1109,10 @@ document.addEventListener('click', e => {
     if (cats.has(c)){ if (cats.size === 1) return toast('Pick at least one swim type'); cats.delete(c); } else cats.add(c);
     session.set('cats', [...cats]); sync(); renderDays(); render(); return; }
   const vb = e.target.closest('[data-view]'); if (vb){ view = vb.dataset.view; store.set('view',view); sync(); render(); return; }
-  const tb = e.target.closest('[data-t]'); if (tb){ tfilter = tb.dataset.t; sync(); render(); return; }
+  const tb = e.target.closest('[data-t]'); if (tb){ tfilter = tb.dataset.t; store.set('tfilter', tfilter); sync(); render(); return; }
   const pl = e.target.closest('[data-pool]');
-  if (pl){ poolId = pl.dataset.pool; store.set('poolId', poolId); if (view !== 'pool'){ view = 'pool'; week = 0; sync(); window.scrollTo(0,0); } render(); return; }
-  const wk = e.target.closest('[data-week]'); if (wk){ week = +wk.dataset.week; render(); return; }
+  if (pl){ poolId = pl.dataset.pool; store.set('poolId', poolId); if (view !== 'pool'){ view = 'pool'; week = 0; store.set('week', 0); sync(); window.scrollTo(0,0); } render(); return; }
+  const wk = e.target.closest('[data-week]'); if (wk){ week = +wk.dataset.week; store.set('week', week); render(); return; }
   const pb = e.target.closest('[data-type]'); if (pb){ ptype = pb.dataset.type; store.set('ptype',ptype); sync(); renderDays(); render(); return; }
 });
 $('#favBtn').addEventListener('click', () => { onlyFav = !onlyFav; store.set('onlyFav', onlyFav); sync(); render(); });
@@ -761,6 +1147,7 @@ $('#theme').addEventListener('click', () => {
 });
 drawTheme();
 sync(); load();
+if (window.AppFeel) AppFeel.onPull = load;
 setInterval(() => { if (!document.hidden) load(); }, 5*60*1000);
 </script>
 </body>
