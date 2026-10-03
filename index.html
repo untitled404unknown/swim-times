@@ -7,10 +7,6 @@
 <meta property="og:title" content="Swim Times · Ottawa pools">
 <meta property="og:description" content="Lane, public, leisure and preschool swim times for Ottawa pools, day by day">
 <meta property="og:url" content="https://untitled404unknown.github.io/swim-times/">
-<meta property="og:image" content="https://untitled404unknown.github.io/swim-times/share-icon.png">
-<meta property="og:image:width" content="512">
-<meta property="og:image:height" content="512">
-<meta name="twitter:card" content="summary">
 <link rel="apple-touch-icon" sizes="180x180" href="https://untitled404unknown.github.io/swim-times/apple-touch-icon.png?v=3">
 
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -677,6 +673,7 @@ async function load(){
   if (sel >= data.days.length) sel = 0;
   renderDays(); render();
   if (window.AppFeel) AppFeel.restoreScroll();
+  openLinkedSwim();
   if (data.refreshing || !data.updated) pollTimer = setTimeout(load, 4000);
 }
 
@@ -1049,8 +1046,17 @@ function openSlot(id){
 }
 function closeSlot(){ const el = $('#slotSheet'); if (el) el.classList.remove('show'); sheetSlot = null; }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSlot(); });
+// "Fri, Oct 2nd - 9:00am - 11:30am"
+function ordinal(n){ const t = n % 100; return n + ((t > 10 && t < 14) ? 'th' : ({1:'st', 2:'nd', 3:'rd'}[n % 10] || 'th')); }
+function shortClock(m){ const h = Math.floor(m/60) % 24; return `${(h + 11) % 12 + 1}:${String(m % 60).padStart(2, '0')}${h < 12 ? 'am' : 'pm'}`; }
+function shortWhen(i){
+  const d = new Date(i.date + 'T12:00:00');
+  return `${d.toLocaleDateString('en-CA', {weekday:'short'})}, ${d.toLocaleDateString('en-CA', {month:'short'})} ${ordinal(d.getDate())} - ${shortClock(i.s.start)} - ${shortClock(i.s.end)}`;
+}
+// A link that opens this exact swim in the shared copy
+function swimLink(i){ return i.link ? i.link + '#s=' + encodeURIComponent(`${i.p.id}~${i.date}~${i.s.start}`) : ''; }
 function shareText(i){
-  return `${i.title} at ${i.place}\n${i.day}, ${i.time}${i.cancelled ? ' (cancelled)' : ''}${i.p.address ? '\n' + i.p.address : ''}`;
+  return `${i.title} - ${i.p.name}\n${shortWhen(i)}${i.cancelled ? ' (cancelled)' : ''}`;
 }
 function copyText(t){
   if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
@@ -1062,12 +1068,13 @@ function copyText(t){
   return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
 }
 async function shareSlot(i){
-  const text = shareText(i);
+  // The link goes inside the message text, so Messages keeps the details and shows the link as a small card
+  const link = swimLink(i), text = shareText(i) + (link ? '\n' + link : '');
   if (navigator.share){
-    try{ await navigator.share(i.link ? {title: i.title, text, url: i.link} : {title: i.title, text}); return; }
+    try{ await navigator.share({title: `${i.title} - ${i.p.name}`, text}); return; }
     catch(e){ if (e && e.name === 'AbortError') return; }
   }
-  try{ await copyText(text + (i.link ? '\n' + i.link : '')); toast('Copied. Paste it into a message.'); }
+  try{ await copyText(text); toast('Copied. Paste it into a message.'); }
   catch(e){ toast("Couldn't share from this browser"); }
 }
 function icsEsc(t){ return String(t || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
@@ -1088,6 +1095,20 @@ function addToCalendar(i){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
+// Opening a shared link (…#s=pool~date~start) jumps to that day and shows the swim
+function openLinkedSwim(){
+  const m = /^#s=(.+)$/.exec(location.hash); if (!m || !data) return;
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  const [pid, date, start] = decodeURIComponent(m[1]).split('~');
+  const di = data.days.findIndex(d => d.date === date);
+  const p = di >= 0 && data.days[di].pools.find(x => x.id === pid);
+  const s = p && p.slots.find(x => x.start === +start);
+  if (!s){ toast(date && date < data.today ? 'That swim has already happened.' : "That swim isn't on the schedule anymore."); return; }
+  sel = di; if (view === 'pool' || view === 'map'){ view = 'list'; store.set('view', view); sync(); }
+  renderDays(); render();
+  const id = ++slotSeq; SLOTS.set(id, {p, date, s}); openSlot(id);
+}
+window.addEventListener('hashchange', openLinkedSwim);
 function googleCalendar(i){
   const q = new URLSearchParams({action: 'TEMPLATE', text: i.title + ' · ' + i.p.name,
     dates: utcStamp(i.start) + '/' + utcStamp(i.end), location: i.where, details: [i.s.note, i.p.url].filter(Boolean).join('\n')});
